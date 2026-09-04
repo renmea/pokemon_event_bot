@@ -1,21 +1,22 @@
 from scraper.tonamel import scrape
-from ui.viewer import show
-from notify.notify import send
 
-results=scrape()
 
-count=sum(
+def run():
 
-    len(x)
+    results = scrape()
 
-    for x in results.values()
+    count = sum(
+        len(x)
+        for x in results.values()
+    )
 
-)
+    return results, count
 
-send(
-    f"{count}件見つかりました"
-)
 
-show(
-    results
-)
+if __name__ == "__main__":
+
+    results, count = run()
+
+    print(
+        f"{count}件見つかりました"
+    )
