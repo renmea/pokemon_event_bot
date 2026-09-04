@@ -1,8 +1,6 @@
 from playwright.sync_api import sync_playwright
 from config import *
 
-import time
-
 
 # ==========================================
 # 募集状態
@@ -58,7 +56,7 @@ def make_url(href):
     if href.startswith("http"):
         return href
 
-    return "https://tonamel.com"+href
+    return "https://tonamel.com" + href
 
 
 # ==========================================
@@ -67,34 +65,39 @@ def make_url(href):
 
 def scroll_bottom(page):
 
-    before=0
-    same=0
+    before = 0
+    same = 0
 
     while True:
 
         page.evaluate(
-            "window.scrollTo(0,document.body.scrollHeight)"
+            "window.scrollTo(0, document.body.scrollHeight)"
         )
 
         page.wait_for_timeout(1200)
 
-        now=page.evaluate(
+        now = page.evaluate(
             "document.body.scrollHeight"
         )
 
-        if now==before:
+        print(
+            f"現在のページ高さ: {now}",
+            flush=True
+        )
 
-            same+=1
+        if now == before:
+
+            same += 1
 
         else:
 
-            same=0
+            same = 0
 
-        if same>=3:
+        if same >= 3:
 
             break
 
-        before=now
+        before = now
 
 
 # ==========================================
@@ -103,36 +106,60 @@ def scroll_bottom(page):
 
 def search_game(page):
 
-    print("ゲーム検索")
+    print(
+        "ゲーム検索開始",
+        flush=True
+    )
 
     search = page.get_by_role(
         "textbox",
         name="ゲーム名で検索"
     )
 
+    search.wait_for(
+        timeout=30000
+    )
+
     search.click()
+
+    print(
+        f"検索ワード入力: {KEYWORD}",
+        flush=True
+    )
 
     search.fill(
         KEYWORD
     )
 
-    # 候補が出るまで待機
-    page.get_by_role(
+    # Pokémon Championsの候補を待つ
+    game_button = page.get_by_role(
         "button",
         name="Pokémon Champions"
-    ).wait_for(
-        timeout=10000
     )
 
-    # 候補クリック
-    page.get_by_role(
-        "button",
-        name="Pokémon Champions"
-    ).click()
+    game_button.wait_for(
+        timeout=30000
+    )
 
-    print("Pokemon Champions選択完了")
+    print(
+        "Pokemon Champions候補を発見",
+        flush=True
+    )
 
-    page.wait_for_timeout(2000)
+    game_button.click()
+
+    print(
+        "Pokemon Champions選択完了",
+        flush=True
+    )
+
+    # ページの大会一覧が読み込まれるのを待つ
+    page.wait_for_timeout(5000)
+
+    print(
+        "検索結果読み込み待機完了",
+        flush=True
+    )
 
 
 # ==========================================
@@ -141,15 +168,39 @@ def search_game(page):
 
 def open_browser():
 
-    p=sync_playwright().start()
-
-    browser=p.chromium.launch(
-        headless=HEADLESS
+    print(
+        "Playwright起動",
+        flush=True
     )
 
-    context=browser.new_context()
+    p = sync_playwright().start()
 
-    page=context.new_page()
+    print(
+        "Chromium起動",
+        flush=True
+    )
+
+    browser = p.chromium.launch(
+        headless=True,
+        args=[
+            "--no-sandbox",
+            "--disable-dev-shm-usage"
+        ]
+    )
+
+    context = browser.new_context(
+        viewport={
+            "width": 1920,
+            "height": 1080
+        }
+    )
+
+    page = context.new_page()
+
+    print(
+        f"ページ移動: {URL}",
+        flush=True
+    )
 
     page.goto(
         URL,
@@ -157,7 +208,13 @@ def open_browser():
         timeout=60000
     )
 
-    return p,browser,context,page
+    print(
+        "ページ移動完了",
+        flush=True
+    )
+
+    return p, browser, context, page
+
 
 # ==========================================
 # 大会カード取得
@@ -165,59 +222,107 @@ def open_browser():
 
 def get_cards(page):
 
-    print("大会一覧取得")
+    print(
+        "大会一覧取得開始",
+        flush=True
+    )
 
-    cards=[]
+    cards = []
 
-    used=set()
+    used = set()
 
-    locators=page.locator(
+    # 大会リンクが出現するまで少し待つ
+    try:
+
+        page.wait_for_selector(
+            "a[href*='/competition/']",
+            timeout=15000
+        )
+
+        print(
+            "大会リンクを検出",
+            flush=True
+        )
+
+    except Exception:
+
+        print(
+            "大会リンクの待機時間が終了しました",
+            flush=True
+        )
+
+
+    locators = page.locator(
         "a[href*='/competition/']"
     )
 
-    count=locators.count()
+    count = locators.count()
 
-    print(f"{count}件検出")
+    print(
+        f"{count}件検出",
+        flush=True
+    )
 
     for i in range(count):
 
         try:
 
-            card=locators.nth(i)
+            card = locators.nth(i)
 
-            href=card.get_attribute("href")
+            href = card.get_attribute(
+                "href"
+            )
 
             if not href:
+
                 continue
 
-            url=make_url(href)
+            url = make_url(
+                href
+            )
 
             if url in used:
+
                 continue
 
-            used.add(url)
+            used.add(
+                url
+            )
 
-            title=card.inner_text().strip()
+            title = card.inner_text().strip()
 
-            texts=card.locator("*").all_inner_texts()
+            texts = card.locator(
+                "*"
+            ).all_inner_texts()
 
-            card_text="\n".join(texts)
+            card_text = "\n".join(
+                texts
+            )
 
             cards.append({
 
-                "title":title,
+                "title": title,
 
-                "url":url,
+                "url": url,
 
-                "card_text":card_text
+                "card_text": card_text
 
             })
 
-        except Exception:
+        except Exception as e:
+
+            print(
+                f"カード取得エラー: {e}",
+                flush=True
+            )
 
             continue
 
-    print(f"{len(cards)}件取得")
+
+    print(
+        f"{len(cards)}件取得完了",
+        flush=True
+    )
 
     return cards
 
@@ -226,9 +331,9 @@ def get_cards(page):
 # 詳細ページ全文取得
 # ==========================================
 
-def get_detail(context,url):
+def get_detail(context, url):
 
-    page=context.new_page()
+    page = context.new_page()
 
     try:
 
@@ -238,15 +343,22 @@ def get_detail(context,url):
             timeout=30000
         )
 
-        page.wait_for_timeout(1500)
+        page.wait_for_timeout(
+            1500
+        )
 
-        text=page.locator(
+        text = page.locator(
             "body"
         ).inner_text()
 
-    except Exception:
+    except Exception as e:
 
-        text=""
+        print(
+            f"詳細取得エラー: {url} / {e}",
+            flush=True
+        )
+
+        text = ""
 
     page.close()
 
@@ -257,47 +369,42 @@ def get_detail(context,url):
 # カード解析
 # ==========================================
 
-def analyze_card(context,card):
+def analyze_card(context, card):
 
-    title=card["title"]
+    title = card["title"]
 
-    url=card["url"]
+    url = card["url"]
 
-    card_text=card["card_text"]
+    card_text = card["card_text"]
 
-
-    status=classify_status(
+    status = classify_status(
         card_text
     )
 
-
-    place=classify_place(
+    place = classify_place(
         card_text
     )
 
-
-    detail_text=get_detail(
+    detail_text = get_detail(
         context,
         url
     )
 
-
-    battle=classify_battle(
+    battle = classify_battle(
         detail_text
     )
 
-
     return {
 
-        "title":title,
+        "title": title,
 
-        "url":url,
+        "url": url,
 
-        "status":status,
+        "status": status,
 
-        "place":place,
+        "place": place,
 
-        "battle":battle
+        "battle": battle
 
     }
 
@@ -306,39 +413,44 @@ def analyze_card(context,card):
 # 全大会解析
 # ==========================================
 
-def analyze_all(context,cards):
+def analyze_all(context, cards):
 
-    results=[]
+    results = []
 
-    total=len(cards)
+    total = len(
+        cards
+    )
 
-    for index,card in enumerate(cards,1):
+    for index, card in enumerate(
+        cards,
+        1
+    ):
 
         print(
-
-            f"[{index}/{total}]",
-
-            card["title"]
-
+            f"[{index}/{total}] {card['title']}",
+            flush=True
         )
 
         try:
 
-            data=analyze_card(
-
+            data = analyze_card(
                 context,
-
                 card
-
             )
 
-            results.append(data)
+            results.append(
+                data
+            )
 
         except Exception as e:
 
-            print(e)
+            print(
+                f"解析エラー: {e}",
+                flush=True
+            )
 
     return results
+
 
 # ==========================================
 # メイン
@@ -346,163 +458,140 @@ def analyze_all(context,cards):
 
 def scrape():
 
-    results={
+    print(
+        "========== スクレイピング開始 ==========",
+        flush=True
+    )
 
-        "募集前":[],
+    results = {
 
-        "募集中":[],
+        "募集前": [],
 
-        "結果発表":[],
+        "募集中": [],
 
-        "その他":[],
+        "結果発表": [],
 
-        "オンライン":[],
+        "その他": [],
 
-        "オフライン":[],
+        "オンライン": [],
 
-        "シングル":[],
+        "オフライン": [],
 
-        "ダブル":[]
+        "シングル": [],
+
+        "ダブル": []
 
     }
 
-    p,browser,context,page=open_browser()
+
+    p = None
+    browser = None
+    context = None
+
 
     try:
 
-        print("ゲーム検索開始")
+        p, browser, context, page = open_browser()
 
-        search_game(page)
 
-        print("スクロール")
-
-        scroll_bottom(page)
-
-        cards=get_cards(page)
-
-        print(f"{len(cards)}件取得")
-
-        datas=analyze_all(
-
-            context,
-
-            cards
-
+        search_game(
+            page
         )
+
+
+        print(
+            "スクロール開始",
+            flush=True
+        )
+
+        scroll_bottom(
+            page
+        )
+
+
+        cards = get_cards(
+            page
+        )
+
+
+        print(
+            f"取得カード数: {len(cards)}",
+            flush=True
+        )
+
+
+        datas = analyze_all(
+            context,
+            cards
+        )
+
 
         for data in datas:
 
-            title=data["title"]
+            title = data["title"]
 
-            url=data["url"]
+            url = data["url"]
 
-            status=data["status"]
+            status = data["status"]
 
-            place=data["place"]
+            place = data["place"]
 
-            battle=data["battle"]
+            battle = data["battle"]
+
 
             results[status].append(
-
-                (title,url)
-
+                (title, url)
             )
 
             results[place].append(
-
-                (title,url)
-
+                (title, url)
             )
 
-            if battle!="その他":
+
+            if battle != "その他":
 
                 results[battle].append(
-
-                    (title,url)
-
+                    (title, url)
                 )
 
-        print()
-
-        print("========== 完了 ==========")
-
-        print()
 
         print(
-
-            "募集前",
-
-            len(results["募集前"])
-
+            "========== 完了 ==========",
+            flush=True
         )
 
-        print(
 
-            "募集中",
+        for category, events in results.items():
 
-            len(results["募集中"])
+            print(
+                f"{category}: {len(events)}件",
+                flush=True
+            )
 
-        )
-
-        print(
-
-            "結果発表",
-
-            len(results["結果発表"])
-
-        )
-
-        print(
-
-            "その他",
-
-            len(results["その他"])
-
-        )
-
-        print()
-
-        print(
-
-            "オンライン",
-
-            len(results["オンライン"])
-
-        )
-
-        print(
-
-            "オフライン",
-
-            len(results["オフライン"])
-
-        )
-
-        print()
-
-        print(
-
-            "シングル",
-
-            len(results["シングル"])
-
-        )
-
-        print(
-
-            "ダブル",
-
-            len(results["ダブル"])
-
-        )
 
         return results
 
+
+    except Exception as e:
+
+        print(
+            f"スクレイピング全体エラー: {e}",
+            flush=True
+        )
+
+        raise
+
+
     finally:
 
-        context.close()
+        if context is not None:
 
-        browser.close()
+            context.close()
 
-        p.stop()
+        if browser is not None:
 
+            browser.close()
+
+        if p is not None:
+
+            p.stop()
